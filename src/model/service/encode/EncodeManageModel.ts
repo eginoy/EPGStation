@@ -52,25 +52,33 @@ class EncodeManageModel implements IEncodeManageModel {
 
         // 実行権取得
         const exeId = await this.executeManagementModel.getExecution(EncodeManageModel.ADD_ENCODE_PRIPORITY);
-
-        // encoder を生成する
-        const encoder = await this.encoderModelProvider();
-        const option = this.createEncodeOption(addOption);
-        encoder.setOption(option);
-
-        // queue に積む
-        this.waitQueue.push(encoder);
-        this.emitNeedsCheckQueue();
-
-        this.log.encode.info(`add new encode: ${option.encodeId}`);
-
         // 実行権開放
-        this.executeManagementModel.unLockExecution(exeId);
+        const finalize = () => this.executeManagementModel.unLockExecution(exeId);
 
-        // イベント発行
-        this.encodeEvent.emitAddEncode(option.encodeId);
+        try {
+            // encoder を生成する
+            const encoder = await this.encoderModelProvider();
+            const option = this.createEncodeOption(addOption);
+            encoder.setOption(option);
 
-        return option.encodeId;
+            // queue に積む
+            this.waitQueue.push(encoder);
+            this.emitNeedsCheckQueue();
+
+            this.log.encode.info(`add new encode: ${option.encodeId}`);
+
+            finalize();
+
+            // イベント発行
+            this.encodeEvent.emitAddEncode(option.encodeId);
+
+            return option.encodeId;
+        } catch (err) {
+           this.log.system.error(`push error: ${err}`); 
+           throw err;
+        }finally{
+            finalize();
+        }
     }
 
     /**
@@ -109,61 +117,69 @@ class EncodeManageModel implements IEncodeManageModel {
         const exeId = await this.executeManagementModel.getExecution(
             EncodeManageModel.CREATE_ENCODING_PROCESS_PRIPORITY,
         );
-
-        // runningQueue がロック中 or 同時エンコード最大数に達している or waitQueue が空の場合はスルー
-        if (this.runningQueue.length >= this.concurrentEncodeNum || this.waitQueue.length === 0) {
-            // 実行権開放
-            this.executeManagementModel.unLockExecution(exeId);
-
-            return;
-        }
-
-        // waitQueue から取り出す
-        const encoder = this.waitQueue.shift();
-        if (typeof encoder === 'undefined') {
-            // 実行権開放
-            this.executeManagementModel.unLockExecution(exeId);
-
-            return;
-        }
-
-        // encodeOption が無い場合は何もしない
-        const encodeOption = encoder.getEncodeOption();
-        if (encodeOption === null) {
-            // 実行権開放
-            this.executeManagementModel.unLockExecution(exeId);
-            this.log.encode.warn('encodeOption is null'); // encoder 生成時にセットされているはずなので警告を出す
-
-            return;
-        }
-
-        // runningQueue に積む
-        this.runningQueue.push(encoder);
-
-        // エンコード終了時の処理をセット
-        encoder.setOnFinish((isError, outputFilePath) => {
-            this.onFinish(isError, outputFilePath, encodeOption);
-        });
-
-        // エンコードプロセス開始
-        let needsFinalize = false;
-        try {
-            await encoder.start();
-        } catch (err: any) {
-            this.log.encode.error(`create encode process error: ${encoder.getEncodeId()}`);
-            this.log.encode.error(err);
-
-            needsFinalize = true;
-
-            // エラー通知
-            this.encodeEvent.emitErrorEncode();
-        }
-
         // 実行権開放
-        this.executeManagementModel.unLockExecution(exeId);
+        const finalize = () => this.executeManagementModel.unLockExecution(exeId);
 
-        if (needsFinalize === true) {
-            this.finalize(encodeOption.encodeId);
+        try {
+            // runningQueue がロック中 or 同時エンコード最大数に達している or waitQueue が空の場合はスルー
+            if (this.runningQueue.length >= this.concurrentEncodeNum || this.waitQueue.length === 0) {
+                // 実行権開放
+                finalize();
+
+                return;
+            }
+
+            // waitQueue から取り出す
+            const encoder = this.waitQueue.shift();
+            if (typeof encoder === 'undefined') {
+                // 実行権開放
+                finalize();
+
+                return;
+            }
+
+            // encodeOption が無い場合は何もしない
+            const encodeOption = encoder.getEncodeOption();
+            if (encodeOption === null) {
+                // 実行権開放
+                finalize();
+                this.log.encode.warn('encodeOption is null'); // encoder 生成時にセットされているはずなので警告を出す
+
+                return;
+            }
+
+            // runningQueue に積む
+            this.runningQueue.push(encoder);
+
+            // エンコード終了時の処理をセット
+            encoder.setOnFinish((isError, outputFilePath) => {
+                this.onFinish(isError, outputFilePath, encodeOption);
+            });
+
+            // エンコードプロセス開始
+            let needsFinalize = false;
+            try {
+                await encoder.start();
+            } catch (err: any) {
+                this.log.encode.error(`create encode process error: ${encoder.getEncodeId()}`);
+                this.log.encode.error(err);
+
+                needsFinalize = true;
+
+                // エラー通知
+                this.encodeEvent.emitErrorEncode();
+            }
+
+            finalize();        
+
+            if (needsFinalize === true) {
+                this.finalize(encodeOption.encodeId);
+            }
+        } catch (err) {
+            this.log.system.error(`check queue error: ${err}`);
+            throw err;
+        }finally{
+            finalize();
         }
     }
 
@@ -243,18 +259,26 @@ class EncodeManageModel implements IEncodeManageModel {
     private async finalize(encodeId: apid.EncodeId): Promise<void> {
         // 実行権取得
         const exeId = await this.executeManagementModel.getExecution(EncodeManageModel.CLEAR_QUEUE_PRIPORITY);
+        const finalize = () => this.executeManagementModel.unLockExecution(exeId);
+        
+        try {
+            // runningQueue から encodeId の要素を削除する
+            this.runningQueue = this.runningQueue.filter(q => {
+                return q.getEncodeId() !== encodeId;
+            });
 
-        // runningQueue から encodeId の要素を削除する
-        this.runningQueue = this.runningQueue.filter(q => {
-            return q.getEncodeId() !== encodeId;
-        });
+            // 実行権開放
+            finalize();
 
-        // 実行権開放
-        this.executeManagementModel.unLockExecution(exeId);
-
-        process.nextTick(() => {
-            this.emitNeedsCheckQueue();
-        });
+            process.nextTick(() => {
+                this.emitNeedsCheckQueue();
+            });
+        } catch (err) {
+           this.log.system.error(`finalize error: ${err}`);
+           throw err;
+        }finally{
+            finalize();
+        }
     }
 
     /**
@@ -264,28 +288,36 @@ class EncodeManageModel implements IEncodeManageModel {
     public async cancel(encodeId: apid.EncodeId): Promise<void> {
         // 実行権取得
         const exeId = await this.executeManagementModel.getExecution(EncodeManageModel.CANCEL_ENCODE_PRIPORITY);
+        const finalize = () => this.executeManagementModel.unLockExecution(exeId);
 
-        this.log.encode.info(`cancel encode: ${encodeId}`);
+        try {
+            this.log.encode.info(`cancel encode: ${encodeId}`);
 
-        // runningQueue にあるので プロセスを殺す
-        const runningQueueItem = this.getRunnginQueueItem(encodeId);
-        if (typeof runningQueueItem !== 'undefined') {
-            await runningQueueItem.cancel();
-        } else {
-            // waitQueue から削除
-            this.waitQueue = this.waitQueue.filter(q => {
-                return q.getEncodeId() !== encodeId;
-            });
+            // runningQueue にあるので プロセスを殺す
+            const runningQueueItem = this.getRunnginQueueItem(encodeId);
+            if (typeof runningQueueItem !== 'undefined') {
+                await runningQueueItem.cancel();
+            } else {
+                // waitQueue から削除
+                this.waitQueue = this.waitQueue.filter(q => {
+                    return q.getEncodeId() !== encodeId;
+                });
 
-            process.nextTick(() => {
-                this.emitNeedsCheckQueue();
-            });
+                process.nextTick(() => {
+                    this.emitNeedsCheckQueue();
+                });
+            }
+
+            finalize();
+
+            // イベント発行
+            this.encodeEvent.emitCancelEncode(encodeId);
+        } catch (err) {
+            this.log.system.error(`cancel error: ${err}`);
+            throw err;
+        }finally{
+            finalize();
         }
-
-        this.executeManagementModel.unLockExecution(exeId);
-
-        // イベント発行
-        this.encodeEvent.emitCancelEncode(encodeId);
     }
 
     /**

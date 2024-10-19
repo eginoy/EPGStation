@@ -36,31 +36,37 @@ class StreamManageModel implements IStreamManageModel {
             this.executeManagementModel.unLockExecution(exeId);
         };
 
-        // stream id 割当
-        const streamId = this.getEmptyStreamId();
-        this.streams[streamId] = stream;
-        this.log.stream.info(`start stream: ${streamId.toString(10)}`);
-
         try {
-            await stream.start(streamId);
-        } catch (err: any) {
-            this.log.stream.error('start stream error');
-            this.log.stream.error(err);
+            // stream id 割当
+            const streamId = this.getEmptyStreamId();
+            this.streams[streamId] = stream;
+            this.log.stream.info(`start stream: ${streamId.toString(10)}`);
+
+            try {
+                await stream.start(streamId);
+            } catch (err: any) {
+                this.log.stream.error('start stream error');
+                this.log.stream.error(err);
+                await this.stop(streamId);
+                throw err;
+            }
+
+            // stream 停止時に停止させる
+            stream.setExitStream(async () => {
+                finalize();
+                await this.stop(streamId).catch();
+            });
+
             finalize();
-            await this.stop(streamId);
+            this.socketIO.notifyClient();
+
+            return streamId;
+        } catch (err) {
+            this.log.system.error(`start error: ${err}`);
             throw err;
-        }
-
-        // stream 停止時に停止させる
-        stream.setExitStream(async () => {
+        }finally{
             finalize();
-            await this.stop(streamId).catch();
-        });
-
-        finalize();
-        this.socketIO.notifyClient();
-
-        return streamId;
+        }
     }
 
     /**
@@ -93,23 +99,27 @@ class StreamManageModel implements IStreamManageModel {
             this.executeManagementModel.unLockExecution(exeId);
         };
 
-        if (typeof this.streams[streamId] === 'undefined') {
-            finalize();
+        try {
+            if (typeof this.streams[streamId] === 'undefined') {
+                return;
+            }
 
-            return;
-        }
+            await this.streams[streamId].stop().catch(err => {
+                this.log.stream.error(`stop stream error ${streamId}`);
+                throw err;
+            });
+            delete this.streams[streamId];
 
-        await this.streams[streamId].stop().catch(err => {
-            this.log.stream.error(`stop stream error ${streamId}`);
             finalize();
+            this.socketIO.notifyClient();
+
+            this.log.stream.info(`stop stream ${streamId}`);
+        } catch (err) {
+            this.log.system.error(`stop error: ${err}`);
             throw err;
-        });
-        delete this.streams[streamId];
-
-        finalize();
-        this.socketIO.notifyClient();
-
-        this.log.stream.info(`stop stream ${streamId}`);
+        }finally{
+            finalize();
+        }
     }
 
     /**
