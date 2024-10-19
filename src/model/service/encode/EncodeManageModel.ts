@@ -74,9 +74,9 @@ class EncodeManageModel implements IEncodeManageModel {
 
             return option.encodeId;
         } catch (err) {
-           this.log.system.error(`push error: ${err}`); 
-           throw err;
-        }finally{
+            this.log.system.error(`push error: ${err}`);
+            throw err;
+        } finally {
             finalize();
         }
     }
@@ -170,7 +170,7 @@ class EncodeManageModel implements IEncodeManageModel {
                 this.encodeEvent.emitErrorEncode();
             }
 
-            finalize();        
+            finalize();
 
             if (needsFinalize === true) {
                 this.finalize(encodeOption.encodeId);
@@ -178,7 +178,7 @@ class EncodeManageModel implements IEncodeManageModel {
         } catch (err) {
             this.log.system.error(`check queue error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -260,7 +260,7 @@ class EncodeManageModel implements IEncodeManageModel {
         // 実行権取得
         const exeId = await this.executeManagementModel.getExecution(EncodeManageModel.CLEAR_QUEUE_PRIPORITY);
         const finalize = () => this.executeManagementModel.unLockExecution(exeId);
-        
+
         try {
             // runningQueue から encodeId の要素を削除する
             this.runningQueue = this.runningQueue.filter(q => {
@@ -274,9 +274,9 @@ class EncodeManageModel implements IEncodeManageModel {
                 this.emitNeedsCheckQueue();
             });
         } catch (err) {
-           this.log.system.error(`finalize error: ${err}`);
-           throw err;
-        }finally{
+            this.log.system.error(`finalize error: ${err}`);
+            throw err;
+        } finally {
             finalize();
         }
     }
@@ -315,7 +315,7 @@ class EncodeManageModel implements IEncodeManageModel {
         } catch (err) {
             this.log.system.error(`cancel error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }

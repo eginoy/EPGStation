@@ -115,15 +115,10 @@ class ReservationManageModel implements IReservationManageModel {
         try {
             // 予約情報の生成
             let newReserve: Reserve;
-            try {
-                if (typeof option.programId === 'undefined') {
-                    newReserve = await this.createManualReserveWithSpecifiedTime(option);
-                } else {
-                    newReserve = await this.createManualReserveWithProgramId(option);
-                }
-            } catch (err) {
-                // 予約情報の生成失敗
-                throw err;
+            if (typeof option.programId === 'undefined') {
+                newReserve = await this.createManualReserveWithSpecifiedTime(option);
+            } else {
+                newReserve = await this.createManualReserveWithProgramId(option);
             }
 
             // 追加する予約情報が競合するかチェック
@@ -157,7 +152,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`add error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -186,7 +181,7 @@ class ReservationManageModel implements IReservationManageModel {
             this.executeManagementModel.unLockExecution(exeId);
         };
 
-        try{
+        try {
             // 予約情報を生成する
             const newReserve = await this.createEventRelayReserve(programId, parentReserve).catch(err => {
                 throw err;
@@ -205,8 +200,8 @@ class ReservationManageModel implements IReservationManageModel {
             });
             newReserve.id = insertedId;
 
-        // 完了したのでロック解除
-        finalize();
+            // 完了したのでロック解除
+            finalize();
 
             this.log.system.info(
                 `successful add event relay. reserveId: ${parentReserve.id}, newReserveId: ${newReserve.id} programId: ${programId}`,
@@ -219,10 +214,10 @@ class ReservationManageModel implements IReservationManageModel {
             });
 
             return insertedId;
-        }catch(err){
+        } catch (err) {
             this.log.system.error(`add event relay: ${err}`);
             throw err;
-        }finally{
+        } finally {
             this.executeManagementModel.unLockExecution(exeId);
         }
     }
@@ -665,7 +660,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`update error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -729,15 +724,15 @@ class ReservationManageModel implements IReservationManageModel {
             const newRulePrograms =
                 rule !== null && rule.reserveOption.enable === true && rule.isTimeSpecification === false
                     ? await this.programDB
-                        .findRule({
-                            searchOption: rule.searchOption,
-                            reserveOption: rule.reserveOption,
-                        })
-                        .catch(err => {
-                            this.log.system.error(`find rule error: ${ruleId}`);
-                            this.log.system.error(err);
-                            throw err;
-                        })
+                          .findRule({
+                              searchOption: rule.searchOption,
+                              reserveOption: rule.reserveOption,
+                          })
+                          .catch(err => {
+                              this.log.system.error(`find rule error: ${ruleId}`);
+                              this.log.system.error(err);
+                              throw err;
+                          })
                     : [];
 
             // 予約情報作成
@@ -904,8 +899,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`update rule error: ${err}`);
             throw err;
-        }finally{
-            
+        } finally {
             finalize();
         }
     }
@@ -1273,7 +1267,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`cancel error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -1351,7 +1345,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`remove skip error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -1431,7 +1425,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`remove overlap error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -1448,7 +1442,7 @@ class ReservationManageModel implements IReservationManageModel {
         const finalize = () => {
             this.executeManagementModel.unLockExecution(exeId);
         };
-        
+
         try {
             this.log.system.info(`edit reservation: ${reserveId}`);
 
@@ -1495,7 +1489,7 @@ class ReservationManageModel implements IReservationManageModel {
         } catch (err) {
             this.log.system.error(`edit error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -1541,12 +1535,11 @@ class ReservationManageModel implements IReservationManageModel {
                 isSuppressLog: false,
             });
         } catch (err) {
-           this.log.system.error(`cleanup error: ${err}`);
-           throw err;
-        }finally{
+            this.log.system.error(`cleanup error: ${err}`);
+            throw err;
+        } finally {
             finalize();
         }
-
     }
 
     /**

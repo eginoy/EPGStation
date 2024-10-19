@@ -64,7 +64,7 @@ class StreamManageModel implements IStreamManageModel {
         } catch (err) {
             this.log.system.error(`start error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
@@ -117,7 +117,7 @@ class StreamManageModel implements IStreamManageModel {
         } catch (err) {
             this.log.system.error(`stop error: ${err}`);
             throw err;
-        }finally{
+        } finally {
             finalize();
         }
     }
